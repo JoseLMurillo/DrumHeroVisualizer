@@ -3,8 +3,10 @@ import * as THREE from "https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.m
 import { DrumElement } from "../models/drumElement.js";
 
 export class DrumKit {
-  constructor(scene) {
+  constructor(scene, options = {}) {
     this.scene = scene;
+    this.reducedMotion = options.reducedMotion ?? false;
+    this.floorY = options.floorY ?? -1;
 
     this.elements = {};
 
@@ -49,159 +51,109 @@ export class DrumKit {
     this.createKit();
   }
 
-  // ========================================================
-  // CREAR BATERÍA
-  // ========================================================
+  /* ========================================================
+     CREAR ELEMENTO
+     ======================================================== */
+
+  createElement(name, options) {
+    const element = new DrumElement({
+      name,
+      position: options.position,
+      color: options.color,
+      radius: options.radius,
+      height: options.height,
+      kind: options.kind,
+      floorY: this.floorY,
+      reducedMotion: this.reducedMotion,
+    });
+
+    element.addToScene(this.scene);
+    this.elements[name] = element;
+
+    return element;
+  }
+
+  /* ========================================================
+     CREAR BATERÍA
+     ======================================================== */
 
   createKit() {
-    // ====================================================
     // BOMBO
-    // ====================================================
-
-    this.elements.kick = new DrumElement({
-      name: "kick",
-
+    this.createElement("kick", {
       position: new THREE.Vector3(0, 0, 0),
-
-      color: 0x4444ff,
-
+      color: 0x7194ff,
       radius: 1.4,
-
       height: 0.8,
     });
 
-    // ====================================================
-    // SNARE
-    // ====================================================
-
-    this.elements.snare = new DrumElement({
-      name: "snare",
-
+    // CAJA
+    this.createElement("snare", {
       position: new THREE.Vector3(-2, 1, 0),
-
-      color: 0xff4444,
-
+      color: 0xff6b6b,
       radius: 0.7,
-
       height: 0.4,
     });
 
-    // ====================================================
     // HI-HAT
-    // ====================================================
-
-    this.elements.hihat = new DrumElement({
-      name: "hihat",
-
+    this.createElement("hihat", {
       position: new THREE.Vector3(-3.2, 1.2, 0),
-
-      color: 0xffff44,
-
+      color: 0xffd166,
       radius: 0.8,
-
       height: 0.2,
     });
 
-    // ====================================================
     // TOM HIGH
-    // ====================================================
-
-    this.elements.tomHigh = new DrumElement({
-      name: "tomHigh",
-
+    this.createElement("tomHigh", {
       position: new THREE.Vector3(-1, 1.8, -0.5),
-
-      color: 0xff8844,
-
+      color: 0xff9f43,
       radius: 0.75,
-
       height: 0.4,
     });
 
-    // ====================================================
     // TOM MID
-    // ====================================================
-
-    this.elements.tomMid = new DrumElement({
-      name: "tomMid",
-
+    this.createElement("tomMid", {
       position: new THREE.Vector3(1, 1.8, -0.5),
-
-      color: 0xff8844,
-
+      color: 0xff7a45,
       radius: 0.85,
-
       height: 0.4,
     });
 
-    // ====================================================
     // FLOOR TOM
-    // ====================================================
-
-    this.elements.floorTom = new DrumElement({
-      name: "floorTom",
-
+    this.createElement("floorTom", {
       position: new THREE.Vector3(2.3, 0.7, 0),
-
-      color: 0xff8844,
-
+      color: 0xffc857,
       radius: 1,
-
       height: 0.6,
     });
 
-    // ====================================================
     // CRASH
-    // ====================================================
-
-    this.elements.crash = new DrumElement({
-      name: "crash",
-
+    this.createElement("crash", {
       position: new THREE.Vector3(-3.5, 2.8, 0),
-
-      color: 0xffff88,
-
+      color: 0xdcff65,
       radius: 1,
-
       height: 0.15,
     });
 
-    // ====================================================
     // RIDE
-    // ====================================================
-
-    this.elements.ride = new DrumElement({
-      name: "ride",
-
+    this.createElement("ride", {
       position: new THREE.Vector3(3.5, 2.5, 0),
-
-      color: 0xffff88,
-
+      color: 0x7ce8ff,
       radius: 1.1,
-
       height: 0.15,
     });
-
-    // ====================================================
-    // AÑADIR A LA ESCENA
-    // ====================================================
-
-    for (const element of Object.values(this.elements)) {
-      element.addToScene(this.scene);
-    }
   }
 
-  // ========================================================
-  // OBTENER ELEMENTO
-  // ========================================================
+  /* ========================================================
+     OBTENER ELEMENTO
+     ======================================================== */
 
   getElement(name) {
     return this.elements[name];
   }
 
-  // ========================================================
-  // OBTENER POSICIÓN DE IMPACTO
-  // ========================================================
+  /* ========================================================
+     OBTENER POSICIÓN DE IMPACTO
+     ======================================================== */
 
   getHitPosition(name) {
     const element = this.getElement(name);
@@ -215,11 +167,11 @@ export class DrumKit {
     return element.hitPosition;
   }
 
-  // ========================================================
-  // GOLPEAR POR NOMBRE
-  // ========================================================
+  /* ========================================================
+     GOLPEAR POR NOMBRE
+     ======================================================== */
 
-  hit(name) {
+  hit(name, strength = 1) {
     const element = this.elements[name];
 
     if (!element) {
@@ -228,14 +180,14 @@ export class DrumKit {
       return;
     }
 
-    element.hit();
+    element.hit(strength);
   }
 
-  // ========================================================
-  // GOLPEAR POR MIDI
-  // ========================================================
+  /* ========================================================
+     GOLPEAR POR MIDI
+     ======================================================== */
 
-  hitMidi(midiNote) {
+  hitMidi(midiNote, strength = 1) {
     const drumName = this.midiMap[midiNote];
 
     if (!drumName) {
@@ -244,12 +196,22 @@ export class DrumKit {
       return;
     }
 
-    this.hit(drumName);
+    this.hit(drumName, strength);
   }
 
-  // ========================================================
-  // RESET
-  // ========================================================
+  /* ========================================================
+     ACTUALIZAR ANIMACIONES
+     ======================================================== */
+
+  update(delta) {
+    for (const element of Object.values(this.elements)) {
+      element.update(delta);
+    }
+  }
+
+  /* ========================================================
+     RESET
+     ======================================================== */
 
   resetAll() {
     for (const element of Object.values(this.elements)) {
@@ -259,5 +221,18 @@ export class DrumKit {
 
   getNameFromMidi(midiNote) {
     return this.midiMap[midiNote];
+  }
+
+  /* ========================================================
+     LIMPIEZA
+     ======================================================== */
+
+  dispose() {
+    for (const element of Object.values(this.elements)) {
+      this.scene.remove(element.group);
+      element.dispose();
+    }
+
+    this.elements = {};
   }
 }

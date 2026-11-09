@@ -1,345 +1,293 @@
-import { Note }
-    from "../models/note.js";
+import { Note } from "../models/note.js";
 
+const START_Z = -30;
 
 export class NoteManager {
+  constructor(scene, drumKit, travelTime = 3) {
+    this.scene = scene;
+    this.drumKit = drumKit;
+    this.travelTime = travelTime;
 
-    constructor(
-        scene,
-        drumKit,
-        travelTime = 3
+    this.notes = [];
+
+    this.lastTime = null;
+
+    // Movimiento reducido: conserva el viaje esencial
+    // pero elimina giros y oscilaciones decorativas.
+    this.reducedMotion = false;
+
+    // Callback de impacto: main.js conecta aquí
+    // los efectos visuales y la animación del tambor.
+    this.onHit = null;
+  }
+
+  /* =========================================================
+     CARGAR NOTAS DE PRUEBA
+     ========================================================= */
+
+  loadNotes(noteData) {
+    this.clear();
+
+    for (const data of noteData) {
+      this.addNote(data);
+    }
+
+    this.sortNotes();
+  }
+
+  /* =========================================================
+     CARGAR NOTAS DESDE MIDI
+     ========================================================= */
+
+  loadMidiNotes(midiNotes) {
+    this.clear();
+
+    let skipped = 0;
+
+    for (const data of midiNotes) {
+      const type = this.drumKit.getNameFromMidi(data.midi);
+
+      if (!type) {
+        skipped += 1;
+        continue;
+      }
+
+      this.addNote({
+        type,
+        time: data.time,
+        velocity: data.velocity,
+      });
+    }
+
+    this.sortNotes();
+
+    console.info(
+      `[PULSE] ${this.notes.length} notas visuales creadas` +
+        (skipped ? ` · ${skipped} MIDI sin mapeo` : ""),
+    );
+  }
+
+  sortNotes() {
+    this.notes.sort((a, b) => a.time - b.time);
+  }
+
+  /* =========================================================
+     CREAR UNA NOTA
+     ========================================================= */
+
+  addNote(data) {
+    const note = new Note(data);
+
+    const drum = this.drumKit.elements[note.type];
+
+    if (!drum) {
+      console.warn(
+        `No existe un elemento de batería para: ${note.type}`,
+      );
+
+      return null;
+    }
+
+    note.addToScene(this.scene);
+
+    note.targetPosition = drum.position.clone();
+
+    note.object.position.set(
+      drum.position.x,
+      drum.position.y,
+      START_Z,
+    );
+
+    note.object.visible = false;
+
+    this.notes.push(note);
+
+    return note;
+  }
+
+  /* =========================================================
+     ACTUALIZAR TODAS LAS NOTAS
+     ========================================================= */
+
+  update(currentTime, delta = 0) {
+    // Detecta saltos de timeline para no disparar
+    // una ráfaga de impactos al hacer seek.
+    if (
+      this.lastTime !== null &&
+      Math.abs(currentTime - this.lastTime) > 0.55
     ) {
-
-        this.scene = scene;
-
-        this.drumKit = drumKit;
-
-        this.travelTime = travelTime;
-
-        this.notes = [];
+      this.resetActivity();
     }
 
+    this.lastTime = currentTime;
 
-    // =========================================================
-    // CARGAR NOTAS DE PRUEBA
-    // =========================================================
+    for (const note of this.notes) {
+      this.updateNote(note, currentTime, delta);
+    }
+  }
 
-    loadNotes(noteData) {
+  resetActivity() {
+    for (const note of this.notes) {
+      note.wasActive = false;
+      note.hitTriggered = false;
+    }
+  }
 
-        this.clear();
+  /* =========================================================
+     ACTUALIZAR UNA NOTA
+     ========================================================= */
 
-        for (const data of noteData) {
+  updateNote(note, currentTime, delta) {
+    const object = note.object;
 
-            this.addNote(data);
-        }
+    if (!object) {
+      return;
     }
 
+    const timeUntilHit = note.time - currentTime;
 
-    // =========================================================
-    // CARGAR NOTAS DESDE MIDI
-    // =========================================================
+    // -----------------------------------------------------
+    // Todavía falta demasiado tiempo
+    // -----------------------------------------------------
 
-    loadMidiNotes(midiNotes) {
+    if (timeUntilHit > this.travelTime) {
+      if (object.visible) {
+        object.visible = false;
+      }
 
-        console.log(
-            "========================================"
-        );
+      note.wasActive = false;
+      note.hitTriggered = false;
 
-        console.log(
-            "CARGANDO NOTAS MIDI"
-        );
-
-        console.log(
-            "Cantidad recibida:",
-            midiNotes.length
-        );
-
-        console.log(
-            "========================================"
-        );
-
-
-        this.clear();
-
-
-        for (const data of midiNotes) {
-
-            const type =
-                this.drumKit.getNameFromMidi(
-                    data.midi
-                );
-
-
-            console.log(
-                `MIDI ${data.midi} → ${type || "SIN MAPEO"}`
-            );
-
-
-            if (!type) {
-
-                console.warn(
-                    `MIDI sin mapeo: ${data.midi}`
-                );
-
-                continue;
-            }
-
-
-            this.addNote({
-
-                type: type,
-
-                time: data.time
-
-            });
-        }
-
-
-        console.log(
-            "Notas visuales creadas:",
-            this.notes.length
-        );
+      return;
     }
 
+    // -----------------------------------------------------
+    // La nota ya pasó
+    // -----------------------------------------------------
 
-    // =========================================================
-    // CREAR UNA NOTA
-    // =========================================================
+    if (timeUntilHit <= 0) {
+      if (note.wasActive && !note.hitTriggered) {
+        note.hitTriggered = true;
 
-    addNote(data) {
+        this.triggerHit(note);
+      }
 
-        const note =
-            new Note(data);
+      object.visible = false;
+      note.wasActive = false;
 
-
-        const drum =
-            this.drumKit.elements[
-                note.type
-            ];
-
-
-        if (!drum) {
-
-            console.warn(
-                `No existe un elemento de batería para: ${note.type}`
-            );
-
-            return null;
-        }
-
-
-        // Crear objeto 3D
-        note.addToScene(
-            this.scene
-        );
-
-
-        // -----------------------------------------------------
-        // Posición objetivo
-        // -----------------------------------------------------
-
-        note.targetPosition =
-            drum.position.clone();
-
-
-        // -----------------------------------------------------
-        // Posición inicial
-        //
-        // Las notas comienzan alejadas de la batería.
-        // -----------------------------------------------------
-
-        note.object.position.set(
-
-            drum.position.x,
-
-            drum.position.y,
-
-            -30
-        );
-
-
-        // -----------------------------------------------------
-        // Ocultar inicialmente
-        //
-        // update() decidirá cuándo debe aparecer.
-        // -----------------------------------------------------
-
-        note.object.visible = false;
-
-
-        this.notes.push(
-            note
-        );
-
-
-        return note;
+      return;
     }
 
+    // -----------------------------------------------------
+    // La nota debe estar visible
+    // -----------------------------------------------------
 
-    // =========================================================
-    // ACTUALIZAR TODAS LAS NOTAS
-    // =========================================================
+    object.visible = true;
+    note.wasActive = true;
 
-    update(currentTime) {
+    // -----------------------------------------------------
+    // Progreso del viaje
+    // 0 = aparece · 1 = llega al instrumento
+    // -----------------------------------------------------
 
-        for (const note of this.notes) {
+    const progress = 1 - timeUntilHit / this.travelTime;
 
-            this.updateNote(
-                note,
-                currentTime
-            );
-        }
+    // -----------------------------------------------------
+    // Trayectoria: se conserva el desplazamiento original
+    // sobre Z y la posición exacta del instrumento en X/Y.
+    // -----------------------------------------------------
+
+    object.position.x = note.targetPosition.x;
+    object.position.y = note.targetPosition.y;
+    object.position.z =
+      START_Z + (note.targetPosition.z - START_Z) * progress;
+
+    // -----------------------------------------------------
+    // Escala: entrada, aproximación y pulso final
+    // -----------------------------------------------------
+
+    const reveal = Math.min(1, progress / 0.14);
+    const proximity = 0.52 + progress * 1.02;
+    const impactPulse = Math.max(0, (progress - 0.87) / 0.13);
+
+    const scale =
+      note.baseScale *
+      proximity *
+      (0.55 + reveal * 0.45) *
+      (1 + impactPulse * 0.28);
+
+    object.scale.setScalar(scale);
+
+    // -----------------------------------------------------
+    // Rotación sutil del núcleo
+    // -----------------------------------------------------
+
+    if (note.core && !this.reducedMotion) {
+      const spin = note.style.spin;
+
+      note.core.rotation.x =
+        note.phase + currentTime * 0.55 * spin;
+
+      note.core.rotation.y =
+        note.phase * 0.7 + currentTime * 0.82 * spin;
+
+      note.core.rotation.z =
+        note.phase * 0.4 + currentTime * 0.36 * spin;
     }
 
+    // -----------------------------------------------------
+    // Micro-oscilación cercana al impacto
+    // -----------------------------------------------------
 
-    // =========================================================
-    // ACTUALIZAR UNA NOTA
-    // =========================================================
+    if (delta > 0 && progress > 0.72 && !this.reducedMotion) {
+      const wobble = Math.sin(currentTime * 26 + note.phase) * 0.012;
 
-    updateNote(
+      object.position.x += wobble;
+    }
+  }
+
+  /* =========================================================
+     IMPACTO
+     ========================================================= */
+
+  triggerHit(note) {
+    if (typeof this.onHit === "function") {
+      this.onHit({
         note,
-        currentTime
-    ) {
+        type: note.type,
+        position: note.targetPosition,
+        color: note.color,
+        velocity: note.velocity,
+      });
+    }
+  }
 
-        const object =
-            note.object;
+  /* =========================================================
+     LIMPIAR TODAS LAS NOTAS
+     ========================================================= */
 
-
-        if (!object) {
-            return;
-        }
-
-
-        const timeUntilHit =
-            note.time -
-            currentTime;
-
-
-        // -----------------------------------------------------
-        // Todavía falta demasiado tiempo
-        // -----------------------------------------------------
-
-        if (
-            timeUntilHit >
-            this.travelTime
-        ) {
-
-            object.visible = false;
-
-            return;
-        }
-
-
-        // -----------------------------------------------------
-        // La nota ya pasó
-        // -----------------------------------------------------
-
-        if (
-            timeUntilHit <
-            0
-        ) {
-
-            object.visible = false;
-
-            return;
-        }
-
-
-        // -----------------------------------------------------
-        // La nota debe estar visible
-        // -----------------------------------------------------
-
-        object.visible = true;
-
-
-        // -----------------------------------------------------
-        // Progreso del viaje
-        //
-        // 0 = acaba de aparecer
-        // 1 = llegó al instrumento
-        // -----------------------------------------------------
-
-        const progress =
-            1 -
-            (
-                timeUntilHit /
-                this.travelTime
-            );
-
-
-        // -----------------------------------------------------
-        // Posición inicial y final
-        // -----------------------------------------------------
-
-        const startZ = -30;
-
-        const endZ =
-            note.targetPosition.z;
-
-
-        // -----------------------------------------------------
-        // Mantener X e Y del instrumento
-        // -----------------------------------------------------
-
-        object.position.x =
-            note.targetPosition.x;
-
-
-        object.position.y =
-            note.targetPosition.y;
-
-
-        // -----------------------------------------------------
-        // Movimiento en Z
-        // -----------------------------------------------------
-
-        object.position.z =
-            startZ +
-            (
-                endZ -
-                startZ
-            ) *
-            progress;
-
-
-        // -----------------------------------------------------
-        // La nota aumenta de tamaño mientras se acerca
-        // -----------------------------------------------------
-
-        const scale =
-            0.5 +
-            progress *
-            1.5;
-
-
-        object.scale.setScalar(
-            scale
-        );
+  clear() {
+    for (const note of this.notes) {
+      if (note.object) {
+        this.scene.remove(note.object);
+        note.dispose();
+      }
     }
 
+    this.notes = [];
+    this.lastTime = null;
+  }
 
-    // =========================================================
-    // LIMPIAR TODAS LAS NOTAS
-    // =========================================================
+  /* =========================================================
+     ESTADÍSTICAS / LIMPIEZA
+     ========================================================= */
 
-    clear() {
+  getNoteCount() {
+    return this.notes.length;
+  }
 
-        for (
-            const note
-            of this.notes
-        ) {
-
-            if (
-                note.object
-            ) {
-
-                this.scene.remove(
-                    note.object
-                );
-            }
-        }
-
-
-        this.notes = [];
-    }
+  dispose() {
+    this.clear();
+    this.onHit = null;
+  }
 }

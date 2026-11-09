@@ -1,20 +1,36 @@
 import * as THREE from "https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.js";
+
 import { formatTime } from "./system/utils.js";
 import { demoNotes } from "./data/demoNotes.js";
 import { NoteManager } from "./system/noteManager.js";
+import { disposeNoteCaches } from "./models/note.js";
 import { DrumKit } from "./drums/drumKit.js";
 import { PlaybackManager } from "./system/playbackManager.js";
 import { ButtonManager } from "./system/buttonManager.js";
 import { MidiManager } from "./system/midiManager.js";
 import { AudioManager } from "./system/audioManager.js";
 import { songCatalog } from "./data/songCatalog.js";
+import { Stage } from "./system/stage.js";
+import { EffectManager } from "./system/effectManager.js";
+import { UIManager } from "./system/uiManager.js";
 
-// CONFIGURACIÓN
+/* =========================================================
+   CONFIGURACIÓN
+   ========================================================= */
 
 const DEMO_DURATION = 60;
 const NOTE_TRAVEL_TIME = 3;
+const FLOOR_Y = -1;
 
-// HTML
+const motionQuery = window.matchMedia("(prefers-reduced-motion: reduce)");
+const coarseQuery = window.matchMedia("(pointer: coarse)");
+
+let reducedMotion = motionQuery.matches;
+const isCoarse = coarseQuery.matches;
+
+/* =========================================================
+   HTML
+   ========================================================= */
 
 const visualizer = document.getElementById("visualizer");
 const timeline = document.getElementById("timeline");
@@ -31,141 +47,136 @@ const audioFileInput = document.getElementById("audio-file");
 const controls = document.getElementById("controls");
 
 const speedControl = document.getElementById("speed-control");
-
 const speedValue = document.getElementById("speed-value");
-
 const tempoValue = document.getElementById("tempo-value");
-
 const decreaseSpeedButton = document.getElementById("decrease-speed");
-
 const increaseSpeedButton = document.getElementById("increase-speed");
 
 const songSelect = document.getElementById("song-select");
-
 const loadSongButton = document.getElementById("load-song");
 
-// MOSTRAR / OCULTAR CONTROLES
-
-let controlsHideTimeout = null;
-
-// MOSTRAR
-
-function showControls() {
-  clearTimeout(controlsHideTimeout);
-
-  controls.classList.add("controls-visible");
-}
-
-// OCULTAR
-
-function hideControls() {
-  controlsHideTimeout = setTimeout(() => {
-    controls.classList.remove("controls-visible");
-  }, 800);
-}
-
-// MOUSE SOBRE LOS CONTROLES
-
-controls.addEventListener("mouseenter", () => {
-  showControls();
-});
-
-controls.addEventListener("mouseleave", () => {
-  hideControls();
-});
-
-// THREE.JS - ESCENA
+/* =========================================================
+   THREE.JS
+   ========================================================= */
 
 const scene = new THREE.Scene();
 
-scene.background = new THREE.Color(0x080808);
+const stage = new Stage(scene, {
+  reducedMotion,
+  floorY: FLOOR_Y,
+  isCoarse,
+});
 
-// CÁMARA
-
-const camera = new THREE.PerspectiveCamera(
-  13,
-  visualizer.clientWidth / visualizer.clientHeight,
-  0.1,
-  200,
-);
-
-camera.position.set(0, 15, 35);
-camera.lookAt(0, 5, 0);
-
-// RENDERER
+const camera = stage.camera;
 
 const renderer = new THREE.WebGLRenderer({
   antialias: true,
   powerPreference: "high-performance",
+  alpha: false,
 });
 
-renderer.setPixelRatio(Math.min(window.devicePixelRatio, 5));
+renderer.setPixelRatio(
+  Math.min(window.devicePixelRatio, isCoarse ? 1.75 : 2),
+);
 
-renderer.setSize(visualizer.clientWidth, visualizer.clientHeight);
+renderer.setSize(
+  visualizer.clientWidth,
+  visualizer.clientHeight,
+);
+
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.16;
+renderer.setClearColor(0x050506, 1);
 
 visualizer.appendChild(renderer.domElement);
 
-// ILUMINACIÓN
-
-const ambientLight = new THREE.AmbientLight(0xffffff, 1.5);
-scene.add(ambientLight);
-const directionalLight = new THREE.DirectionalLight(0xffffff, 2);
-directionalLight.position.set(5, 10, 10);
-scene.add(directionalLight);
-
-// PISO
-
-const floorGeometry = new THREE.PlaneGeometry(30, 40);
-const floorMaterial = new THREE.MeshStandardMaterial({
-  color: 0x111111,
-});
-
-const floor = new THREE.Mesh(floorGeometry, floorMaterial);
-floor.rotation.x = -Math.PI / 2;
-floor.position.y = -1;
-scene.add(floor);
-
-// BATERÍA
-
-const drumKit = new DrumKit(scene);
-
-// NOTAS
-
-const noteManager = new NoteManager(scene, drumKit, NOTE_TRAVEL_TIME);
-
-// MIDI
-
-const midiManager = new MidiManager();
-
-// AUDIO
-
-const audioManager = new AudioManager();
-
-// REPRODUCCIÓN
-
-const playback = new PlaybackManager(audioManager);
-
-// CARGAR DEMO
-
-noteManager.loadNotes(demoNotes);
-playback.setDuration(DEMO_DURATION);
-
-// BOTONES
-
-const buttonManager = new ButtonManager(
-  playback,
-
-  {
-    playButton,
-    pauseButton,
-    stopButton,
-    backwardButton,
-    forwardButton,
-    timeline,
-  },
+stage.setViewport(
+  visualizer.clientWidth,
+  visualizer.clientHeight,
 );
 
-// CONFIGURACIÓN INICIAL DE LA UI
+/* =========================================================
+   BATERÍA
+   ========================================================= */
+
+const drumKit = new DrumKit(scene, {
+  reducedMotion,
+  floorY: FLOOR_Y,
+});
+
+/* =========================================================
+   EFECTOS
+   ========================================================= */
+
+const effectManager = new EffectManager(scene, {
+  reducedMotion,
+  floorY: FLOOR_Y,
+});
+
+/* =========================================================
+   NOTAS
+   ========================================================= */
+
+const noteManager = new NoteManager(
+  scene,
+  drumKit,
+  NOTE_TRAVEL_TIME,
+);
+
+/* =========================================================
+   MIDI / AUDIO / REPRODUCCIÓN
+   ========================================================= */
+
+const midiManager = new MidiManager();
+const audioManager = new AudioManager();
+const playback = new PlaybackManager(audioManager);
+
+/* =========================================================
+   UI
+   ========================================================= */
+
+const ui = new UIManager({
+  playback,
+  reducedMotion,
+});
+
+ui.onPointerMove = (x, y) => {
+  stage.setPointer(x, y);
+};
+
+noteManager.onHit = ({ type, color, velocity, position }) => {
+  drumKit.hit(type, 0.65 + velocity * 0.65);
+
+  effectManager.impact(position, color, velocity);
+
+  stage.pulse(0.22 + velocity * 0.3);
+};
+
+/* =========================================================
+   DEMO
+   ========================================================= */
+
+noteManager.loadNotes(demoNotes);
+
+playback.setDuration(DEMO_DURATION);
+
+/* =========================================================
+   BOTONES
+   ========================================================= */
+
+const buttonManager = new ButtonManager(playback, {
+  playButton,
+  pauseButton,
+  stopButton,
+  backwardButton,
+  forwardButton,
+  timeline,
+});
+
+/* =========================================================
+   CONFIGURACIÓN INICIAL
+   ========================================================= */
 
 timeline.min = 0;
 timeline.max = DEMO_DURATION;
@@ -176,7 +187,9 @@ durationElement.textContent = formatTime(DEMO_DURATION);
 currentTimeElement.textContent = formatTime(0);
 statusElement.textContent = "Detenido";
 
-// CARGAR MIDI
+/* =========================================================
+   CARGAR MIDI
+   ========================================================= */
 
 midiFileInput.addEventListener("change", async () => {
   const file = midiFileInput.files[0];
@@ -186,42 +199,41 @@ midiFileInput.addEventListener("change", async () => {
   }
 
   try {
-    statusElement.textContent = "Cargando MIDI...";
+    ui.setBusy(true, "Cargando MIDI...");
 
     const result = await midiManager.load(file);
-
-    /*
-                Reemplazamos las notas
-                de demostración por las
-                notas reales del MIDI.
-            */
 
     noteManager.loadMidiNotes(result.notes);
 
     updateTempoDisplay();
 
-    /*
-                La duración ahora viene
-                directamente del MIDI.
-            */
+    playback.stop();
 
     playback.setDuration(result.duration);
 
     timeline.max = result.duration;
-
-    timeline.value = playback.currentTime;
+    timeline.value = 0;
 
     durationElement.textContent = formatTime(result.duration);
+    currentTimeElement.textContent = formatTime(0);
 
-    statusElement.textContent = "MIDI cargado";
+    const title = file.name.replace(/\.[^.]+$/, "");
+
+    ui.setNowPlaying(title);
+    ui.transitionReveal(title);
+    ui.setStatus("MIDI cargado");
   } catch (error) {
     console.error("Error cargando MIDI:", error);
 
-    statusElement.textContent = "Error cargando MIDI";
+    ui.setStatus("Error cargando MIDI");
+  } finally {
+    ui.setBusy(false);
   }
 });
 
-// CARGAR AUDIO
+/* =========================================================
+   CARGAR AUDIO
+   ========================================================= */
 
 audioFileInput.addEventListener("change", () => {
   const file = audioFileInput.files[0];
@@ -232,71 +244,51 @@ audioFileInput.addEventListener("change", () => {
 
   audioManager.load(file);
 
-  statusElement.textContent = "Audio cargado";
+  ui.setStatus("Audio cargado");
 });
 
-// RESIZE
+/* =========================================================
+   RESIZE
+   ========================================================= */
 
-window.addEventListener("resize", () => {
-  const width = visualizer.clientWidth;
-  const height = visualizer.clientHeight;
-  camera.aspect = width / height;
-  camera.updateProjectionMatrix();
-  renderer.setSize(width, height);
-});
+let resizeFrame = null;
+let visualizerObserver = null;
 
-let lastFrameTime = performance.now();
-
-// ANIMACIÓN
-
-function animate(now) {
-  requestAnimationFrame(animate);
-
-  const delta = (now - lastFrameTime) / 1000;
-
-  lastFrameTime = now;
-
-  // ACTUALIZAR REPRODUCCIÓN
-  playback.update(delta);
-
-  updateTempoDisplay();
-
-  // TIEMPO ACTUAL
-  const currentTime = playback.currentTime;
-
-  // ACTUALIZAR NOTAS
-  noteManager.update(currentTime);
-
-  // TIMELINE
-  timeline.value = currentTime;
-
-  // TIEMPO
-  currentTimeElement.textContent = formatTime(currentTime);
-
-  // ESTADO
-  if (playback.playing) {
-    statusElement.textContent = "Reproduciendo";
-  } else if (
-    playback.currentTime >= playback.duration &&
-    playback.duration > 0
-  ) {
-    statusElement.textContent = "Finalizado";
+function resize() {
+  if (resizeFrame) {
+    cancelAnimationFrame(resizeFrame);
   }
 
-  // RENDER
-  renderer.render(scene, camera);
+  resizeFrame = requestAnimationFrame(() => {
+    resizeFrame = null;
+
+    const width = visualizer.clientWidth;
+    const height = visualizer.clientHeight;
+
+    if (width === 0 || height === 0) {
+      return;
+    }
+
+    renderer.setPixelRatio(
+      Math.min(window.devicePixelRatio, isCoarse ? 1.75 : 2),
+    );
+
+    renderer.setSize(width, height);
+    stage.resize(width, height);
+  });
 }
 
-// INICIAR
-animate();
+window.addEventListener("resize", resize);
 
-const controlsTrigger = document.getElementById("controls-trigger");
+if (typeof ResizeObserver !== "undefined") {
+  visualizerObserver = new ResizeObserver(resize);
+  visualizerObserver.observe(visualizer);
+}
 
-controlsTrigger.addEventListener("mouseenter", () => {
-  showControls();
-});
+/* =========================================================
+   VELOCIDAD / TEMPO
+   ========================================================= */
 
-// CAMBIAR VELOCIDAD
 function changeSpeed(rate) {
   const min = Number(speedControl.min);
   const max = Number(speedControl.max);
@@ -307,27 +299,25 @@ function changeSpeed(rate) {
 
   speedControl.value = rate;
 
-  speedValue.textContent = rate.toFixed(2) + "×";
+  speedValue.textContent = `${rate.toFixed(2)}×`;
+
+  ui.setSpeedDisplay(rate);
 
   updateTempoDisplay();
 }
 
-// SLIDER DE VELOCIDAD
 speedControl.addEventListener("input", () => {
   changeSpeed(Number(speedControl.value));
 });
 
-// DISMINUIR VELOCIDAD
 decreaseSpeedButton.addEventListener("click", () => {
   changeSpeed(Number(speedControl.value) - 0.05);
 });
 
-// AUMENTAR VELOCIDAD
 increaseSpeedButton.addEventListener("click", () => {
   changeSpeed(Number(speedControl.value) + 0.05);
 });
 
-// ACTUALIZAR BPM EN PANTALLA
 function updateTempoDisplay() {
   const originalBpm = midiManager.getBpmAtTime(playback.currentTime);
 
@@ -336,65 +326,217 @@ function updateTempoDisplay() {
   tempoValue.textContent = Math.round(effectiveBpm);
 }
 
-// ========================================================
-// INICIALIZAR BIBLIOTECA
-// ========================================================
+/* =========================================================
+   BIBLIOTECA
+   ========================================================= */
 
 for (const song of songCatalog) {
   const option = document.createElement("option");
 
   option.value = song.id;
-
   option.textContent = song.title;
 
   songSelect.appendChild(option);
 }
 
-// ========================================================
-// CARGAR CANCIÓN DE LA BIBLIOTECA
-// ========================================================
-
 loadSongButton.addEventListener("click", async () => {
-  const selectedSong = songCatalog.find((song) => song.id === songSelect.value);
+  const selectedSong = songCatalog.find(
+    (song) => song.id === songSelect.value,
+  );
 
   if (!selectedSong) {
-    statusElement.textContent = "Selecciona una canción";
+    ui.setStatus("Selecciona una canción");
     return;
   }
 
   try {
     playback.pause();
 
-    statusElement.textContent = "Cargando canción...";
+    ui.setBusy(true, "Cargando canción...");
 
-    // Cargar MIDI
     const result = await midiManager.loadFromUrl(selectedSong.midi);
 
     noteManager.loadMidiNotes(result.notes);
 
-    // Actualizar duración y timeline
     playback.setDuration(result.duration);
-
     playback.stop();
 
     timeline.max = result.duration;
-
     timeline.value = 0;
 
     durationElement.textContent = formatTime(result.duration);
-
     currentTimeElement.textContent = formatTime(0);
 
-    // Cargar audio
     audioManager.loadFromUrl(selectedSong.audio);
 
-    // Actualizar BPM
     updateTempoDisplay();
 
-    statusElement.textContent = `Canción cargada: ${selectedSong.title}`;
+    ui.setNowPlaying(selectedSong.title);
+    ui.transitionReveal(selectedSong.title);
+    ui.setStatus(`Canción cargada: ${selectedSong.title}`);
   } catch (error) {
     console.error("Error cargando canción:", error);
 
-    statusElement.textContent = "Error cargando canción. Revisa las rutas.";
+    ui.setStatus("Error cargando canción. Revisa las rutas.");
+  } finally {
+    ui.setBusy(false);
   }
 });
+
+/* =========================================================
+   INICIALIZAR UI
+   ========================================================= */
+
+ui.initLibraryCards();
+ui.init();
+
+/* =========================================================
+   PREFERENCIAS DE MOVIMIENTO
+   ========================================================= */
+
+function applyReducedMotion(matches) {
+  reducedMotion = matches;
+
+  stage.reducedMotion = matches;
+  effectManager.reducedMotion = matches;
+  noteManager.reducedMotion = matches;
+
+  for (const element of Object.values(drumKit.elements)) {
+    element.reducedMotion = matches;
+  }
+
+  if (matches) {
+    stage.setPointer(0, 0);
+    document.documentElement.style.setProperty("--px", "0");
+    document.documentElement.style.setProperty("--py", "0");
+  }
+}
+
+ui.onReducedMotionChange = applyReducedMotion;
+
+function handleMotionChange(event) {
+  applyReducedMotion(event.matches);
+}
+
+if (motionQuery.addEventListener) {
+  motionQuery.addEventListener("change", handleMotionChange);
+}
+
+/* =========================================================
+   ANIMACIÓN
+   ========================================================= */
+
+const clock = new THREE.Clock();
+
+let frameId = null;
+let lastStatus = "";
+
+function getStatusText(currentTime) {
+  if (playback.playing) {
+    return "Reproduciendo";
+  }
+
+  if (currentTime >= playback.duration && playback.duration > 0) {
+    return "Finalizado";
+  }
+
+  if (currentTime > 0) {
+    return "En pausa";
+  }
+
+  return "Detenido";
+}
+
+function animate() {
+  frameId = requestAnimationFrame(animate);
+
+  const delta = Math.min(clock.getDelta(), 0.05);
+  const elapsed = clock.elapsedTime;
+
+  // Reproducción
+  playback.update(delta);
+
+  const currentTime = playback.currentTime;
+
+  // Notas + animaciones 3D
+  noteManager.update(currentTime, delta);
+  drumKit.update(delta);
+  effectManager.update(delta);
+
+  // Tempo
+  const originalBpm = midiManager.getBpmAtTime(currentTime);
+  const effectiveBpm = originalBpm * playback.playbackRate;
+
+  // Estado
+  const status = getStatusText(currentTime);
+
+  if (status !== lastStatus) {
+    lastStatus = status;
+
+    statusElement.textContent = status;
+  }
+
+  // UI sincronizada
+  ui.updatePlayback({
+    currentTime,
+    duration: playback.duration || DEMO_DURATION,
+    playing: playback.playing,
+    status,
+    tempo: effectiveBpm,
+    rate: playback.playbackRate,
+  });
+
+  // Escenario
+  stage.update(delta, elapsed, playback.playing);
+
+  // Render
+  renderer.render(scene, camera);
+}
+
+animate();
+
+/* =========================================================
+   LIMPIEZA AL SALIR
+   ========================================================= */
+
+let cleanedUp = false;
+
+function cleanup(event) {
+  // No destruir la escena si el navegador la conserva en bfcache.
+  if (cleanedUp || event?.persisted) {
+    return;
+  }
+
+  cleanedUp = true;
+
+  if (frameId) {
+    cancelAnimationFrame(frameId);
+    frameId = null;
+  }
+
+  if (resizeFrame) {
+    cancelAnimationFrame(resizeFrame);
+    resizeFrame = null;
+  }
+
+  window.removeEventListener("resize", resize);
+
+  visualizerObserver?.disconnect();
+  visualizerObserver = null;
+
+  if (motionQuery.removeEventListener) {
+    motionQuery.removeEventListener("change", handleMotionChange);
+  }
+
+  ui.dispose();
+
+  noteManager.dispose();
+  effectManager.dispose();
+  drumKit.dispose();
+  stage.dispose();
+  disposeNoteCaches();
+
+  renderer.dispose();
+}
+
+window.addEventListener("pagehide", cleanup);

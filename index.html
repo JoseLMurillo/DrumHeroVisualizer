@@ -4,108 +4,514 @@
     <meta charset="UTF-8" />
     <meta
       name="viewport"
-      content="width=device-width, initial-scale=1.0, maximum-scale=1.0"
+      content="width=device-width, initial-scale=1.0, viewport-fit=cover"
+    />
+    <meta name="theme-color" content="#050505" />
+    <meta
+      name="description"
+      content="PULSE — visualizador de batería MIDI en tiempo real. Una experiencia audiovisual cinematográfica."
     />
 
-    <title>Drum Visualizer - Demo</title>
+    <title>PULSE — Drum Visualizer</title>
 
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Anton&family=Space+Grotesk:wght@300;400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
     <link rel="stylesheet" href="style.css" />
   </head>
 
-  <body>
-    <div class="file-controls">
-      <label>
-        MIDI
-        <input type="file" id="midi-file" accept=".mid,.midi" />
-      </label>
+  <body class="is-intro">
+    <!-- =====================================================
+         CAPAS ATMOSFÉRICAS
+         ===================================================== -->
 
-      <label>
-        Audio
-        <input type="file" id="audio-file" accept="audio/*" />
-      </label>
+    <div class="atmos atmos--amber" aria-hidden="true"></div>
+    <div class="atmos atmos--acid" aria-hidden="true"></div>
+    <div class="grain" aria-hidden="true"></div>
+    <div class="vignette" aria-hidden="true"></div>
+
+    <!-- =====================================================
+         MARCO CINEMATOGRÁFICO
+         ===================================================== -->
+
+    <div class="frame" aria-hidden="true">
+      <span class="frame__corner frame__corner--tl"></span>
+      <span class="frame__corner frame__corner--tr"></span>
+      <span class="frame__corner frame__corner--bl"></span>
+      <span class="frame__corner frame__corner--br"></span>
     </div>
 
-    <div class="library-controls">
-      <label for="song-select"> Biblioteca de canciones </label>
+    <!-- =====================================================
+         INTRO / REVELADO
+         ===================================================== -->
 
-      <select id="song-select">
-        <option value="">Seleccionar canción...</option>
-      </select>
+    <div class="intro" id="intro">
+      <div class="intro__glow" aria-hidden="true"></div>
 
-      <button type="button" id="load-song">Cargar canción</button>
+      <div class="intro__content">
+        <p class="intro__eyebrow">
+          <span class="pulse-dot"></span>
+          A/V SESSION — 001
+        </p>
+
+        <h1 class="intro__title">
+          <span class="intro__line"><span>DRUM</span></span>
+          <span class="intro__line intro__line--outline"
+            ><span>VISUALIZER</span></span
+          >
+        </h1>
+
+        <div class="intro__footer">
+          <p class="intro__copy">
+            Señales de luz sobre cuero y metal.<br />
+            Cada golpe, una coordenada.
+          </p>
+          <div class="intro__loop" aria-hidden="true">
+            <span></span>
+          </div>
+        </div>
+      </div>
+
+      <p class="intro__hint">Toca o pulsa una tecla para entrar</p>
     </div>
 
     <main id="app">
-      <section id="visualizer">
-        <!-- Three.js se renderiza aquí -->
-      </section>
+      <!-- ===================================================
+           ESCENARIO THREE.JS
+           =================================================== -->
 
-      <section id="controls">
-        <div class="buttons">
-          <button id="play">▶</button>
-          <button id="pause">⏸</button>
-          <button id="stop">■</button>
+      <section
+        id="visualizer"
+        aria-label="Escenario 3D de batería sincronizado con el MIDI"
+      ></section>
 
-          <button id="backward">↶ 5s</button>
-          <button id="forward">5s ↷</button>
+      <!-- ===================================================
+           HUD SUPERIOR
+           =================================================== -->
 
-          <div id="speed-controls">
-            <label for="speed-control"> Velocidad </label>
+      <header class="hud">
+        <a class="brand" href="#" aria-label="PULSE, inicio">
+          <span class="brand__mark" aria-hidden="true">
+            <span></span><span></span><span></span>
+          </span>
+          <span class="brand__text">
+            <strong>PULSE</strong>
+            <small>Drum visualizer</small>
+          </span>
+        </a>
+
+        <div class="now" aria-live="polite">
+          <span class="now__label">Ahora suena</span>
+          <span class="now__title" id="track-title">Demo Session</span>
+          <span class="now__wave" aria-hidden="true">
+            <i></i><i></i><i></i><i></i><i></i>
+          </span>
+        </div>
+
+        <div class="hud__actions">
+          <div class="bpm-chip" title="Tempo actual">
+            <span>BPM</span>
+            <strong id="tempo-value">—</strong>
+          </div>
+
+          <button
+            class="icon-btn"
+            type="button"
+            id="library-toggle"
+            aria-label="Abrir biblioteca de canciones"
+            aria-expanded="false"
+            aria-controls="library-drawer"
+          >
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path
+                d="M4 6.5h16M6.5 12h11M9 17.5h6"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.6"
+                stroke-linecap="round"
+              />
+              <circle
+                cx="19.5"
+                cy="17.5"
+                r="2.5"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.6"
+              />
+            </svg>
+          </button>
+
+          <button
+            class="icon-btn"
+            type="button"
+            id="fullscreen-toggle"
+            aria-label="Entrar en pantalla completa"
+            title="Pantalla completa"
+          >
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path
+                d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.6"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              />
+            </svg>
+          </button>
+        </div>
+      </header>
+
+      <!-- ===================================================
+           ETIQUETAS EDITORIALES
+           =================================================== -->
+
+      <div class="scene-label" aria-hidden="true">
+        <span>LIVE</span>
+        <span class="scene-label__line"></span>
+        <span>SESSION 01</span>
+      </div>
+
+      <div class="kit-legend" aria-hidden="true">
+        <span class="kit-legend__title">KIT MAP</span>
+        <ul>
+          <li><i style="--dot: #7194ff"></i>Kick</li>
+          <li><i style="--dot: #ff6b6b"></i>Snare</li>
+          <li><i style="--dot: #ffd166"></i>Hi-hat</li>
+          <li><i style="--dot: #ff9f43"></i>Toms</li>
+          <li><i style="--dot: #dcff65"></i>Crash</li>
+          <li><i style="--dot: #7ce8ff"></i>Ride</li>
+        </ul>
+      </div>
+
+      <!-- ===================================================
+           HINT DE CONTROLES
+           =================================================== -->
+
+      <button
+        class="controls-hint"
+        type="button"
+        id="controls-trigger"
+        aria-label="Mostrar controles de reproducción"
+      >
+        <span></span>
+        Controles
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path
+            d="m6 15 6-6 6 6"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.8"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          />
+        </svg>
+      </button>
+
+      <!-- ===================================================
+           DOCK DE TRANSPORTE
+           =================================================== -->
+
+      <section
+        id="controls"
+        class="dock controls-visible"
+        aria-label="Controles de reproducción"
+      >
+        <div class="dock__timeline">
+          <span class="timecode" id="current-time">0:00</span>
+
+          <div class="timeline-wrap">
+            <input
+              id="timeline"
+              type="range"
+              min="0"
+              max="60"
+              step="0.01"
+              value="0"
+              aria-label="Posición de la canción"
+            />
+            <div class="timeline-ticks" aria-hidden="true">
+              <span></span><span></span><span></span><span></span>
+              <span></span><span></span><span></span><span></span>
+              <span></span><span></span><span></span><span></span>
+            </div>
+          </div>
+
+          <span class="timecode timecode--muted" id="duration">1:00</span>
+        </div>
+
+        <div class="dock__main">
+          <div class="transport" role="group" aria-label="Transporte">
+            <button
+              class="icon-btn icon-btn--ghost"
+              type="button"
+              id="backward"
+              aria-label="Retroceder 5 segundos"
+              title="Retroceder 5s"
+            >
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path
+                  d="M11 7 5 12l6 5V7Zm8 0-6 5 6 5V7Z"
+                  fill="currentColor"
+                />
+              </svg>
+            </button>
 
             <button
+              class="transport-play"
+              type="button"
+              id="play"
+              aria-label="Reproducir"
+              title="Reproducir (Espacio)"
+            >
+              <span class="transport-play__ring" aria-hidden="true"></span>
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M8 5.5v13l11-6.5-11-6.5Z" fill="currentColor" />
+              </svg>
+            </button>
+
+            <button
+              class="icon-btn icon-btn--ghost"
+              type="button"
+              id="pause"
+              aria-label="Pausar"
+              title="Pausar (Espacio)"
+            >
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M7 5h3.5v14H7V5Zm6.5 0H17v14h-3.5V5Z" fill="currentColor" />
+              </svg>
+            </button>
+
+            <button
+              class="icon-btn icon-btn--ghost"
+              type="button"
+              id="stop"
+              aria-label="Detener"
+              title="Detener"
+            >
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <rect x="6.5" y="6.5" width="11" height="11" rx="1" fill="currentColor" />
+              </svg>
+            </button>
+
+            <button
+              class="icon-btn icon-btn--ghost"
+              type="button"
+              id="forward"
+              aria-label="Avanzar 5 segundos"
+              title="Avanzar 5s"
+            >
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path
+                  d="m13 7 6 5-6 5V7ZM5 7l6 5-6 5V7Z"
+                  fill="currentColor"
+                />
+              </svg>
+            </button>
+          </div>
+
+          <div id="speed-controls" class="speed">
+            <button
+              class="icon-btn icon-btn--tiny"
               type="button"
               id="decrease-speed"
+              aria-label="Disminuir velocidad"
               title="Disminuir velocidad"
             >
-              -
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M6 12h12" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+              </svg>
             </button>
 
-            <input
-              type="range"
-              id="speed-control"
-              min="0.5"
-              max="1.5"
-              step="0.05"
-              value="1"
-            />
+            <label class="speed__range" for="speed-control">
+              <span class="speed__label">Velocidad</span>
+              <input
+                type="range"
+                id="speed-control"
+                min="0.5"
+                max="1.5"
+                step="0.05"
+                value="1"
+                aria-label="Velocidad de reproducción"
+              />
+            </label>
 
             <button
+              class="icon-btn icon-btn--tiny"
               type="button"
               id="increase-speed"
+              aria-label="Aumentar velocidad"
               title="Aumentar velocidad"
             >
-              +
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path
+                  d="M12 6v12M6 12h12"
+                  stroke="currentColor"
+                  stroke-width="1.8"
+                  stroke-linecap="round"
+                />
+              </svg>
             </button>
 
-            <span id="speed-value">1.00×</span>
+            <span class="speed__value" id="speed-value">1.00×</span>
+          </div>
 
-            <span class="tempo-display">
-              BPM:
-              <strong id="tempo-value">—</strong>
+          <div class="dock__meta">
+            <span class="dock__session">SESSION 01</span>
+            <span class="status-pill" id="status" role="status" aria-live="polite">
+              Detenido
             </span>
           </div>
         </div>
+      </section>
 
-        <div class="timeline-container">
-          <span id="current-time">0:00</span>
+      <!-- ===================================================
+           DRAWER / BIBLIOTECA
+           =================================================== -->
 
-          <input
-            id="timeline"
-            type="range"
-            min="0"
-            max="60"
-            step="0.01"
-            value="0"
-          />
+      <div id="drawer-scrim" class="scrim" hidden></div>
 
-          <span id="duration">1:00</span>
+      <aside
+        id="library-drawer"
+        class="drawer"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="drawer-title"
+        aria-hidden="true"
+      >
+        <div class="drawer__head">
+          <p class="eyebrow"><span class="pulse-dot"></span>Library / Import</p>
+
+          <button
+            class="icon-btn"
+            type="button"
+            id="library-close"
+            aria-label="Cerrar biblioteca"
+          >
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path
+                d="m6 6 12 12M18 6 6 18"
+                stroke="currentColor"
+                stroke-width="1.7"
+                stroke-linecap="round"
+              />
+            </svg>
+          </button>
         </div>
 
-        <div id="status">Detenido</div>
-      </section>
+        <h2 class="drawer__title" id="drawer-title">
+          SELECT<br /><span>YOUR SET</span>
+        </h2>
+
+        <div class="drawer__body">
+          <section class="drawer__section">
+            <div class="field-label">
+              <span>Biblioteca</span>
+              <span class="field-label__count" id="song-count">00</span>
+            </div>
+
+            <div class="select-shell">
+              <select id="song-select" aria-label="Seleccionar canción de la biblioteca">
+                <option value="">Seleccionar canción...</option>
+              </select>
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path
+                  d="m7 10 5 5 5-5"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="1.6"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                />
+              </svg>
+            </div>
+
+            <div id="song-list" class="song-list"></div>
+
+            <button type="button" id="load-song" class="btn-primary">
+              <span>Cargar canción</span>
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path
+                  d="M5 12h14m-5-5 5 5-5 5"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="1.8"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                />
+              </svg>
+            </button>
+          </section>
+
+          <section class="drawer__section drawer__section--files">
+            <div class="field-label"><span>Archivos locales</span></div>
+
+            <label class="file-drop">
+              <input type="file" id="midi-file" accept=".mid,.midi" />
+              <span class="file-drop__icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24">
+                  <path
+                    d="M12 16V4m0 0L7.5 8.5M12 4l4.5 4.5M5 15v4h14v-4"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="1.6"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  />
+                </svg>
+              </span>
+              <span class="file-drop__text">
+                <strong>MIDI</strong>
+                <small id="midi-file-name">.mid / .midi</small>
+              </span>
+              <span class="file-drop__cta">Abrir</span>
+            </label>
+
+            <label class="file-drop">
+              <input type="file" id="audio-file" accept="audio/*" />
+              <span class="file-drop__icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24">
+                  <path
+                    d="M9 18V6l10-2v12M9 18a3 3 0 1 1-3-3h3m10 0a3 3 0 1 1-3-3h3"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="1.6"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  />
+                </svg>
+              </span>
+              <span class="file-drop__text">
+                <strong>Audio</strong>
+                <small id="audio-file-name">MP3 / WAV / OGG</small>
+              </span>
+              <span class="file-drop__cta">Abrir</span>
+            </label>
+          </section>
+        </div>
+
+        <footer class="drawer__foot">
+          <span>PULSE ENGINE</span>
+          <span>60 FPS / WEBGL</span>
+        </footer>
+      </aside>
+
+      <!-- ===================================================
+           TRANSICIÓN DE CARGA
+           =================================================== -->
+
+      <div class="scene-wipe" id="scene-wipe" aria-hidden="true">
+        <div class="scene-wipe__panel"></div>
+        <div class="scene-wipe__content">
+          <span>NOW LOADING</span>
+          <strong id="scene-wipe-title">Demo Session</strong>
+        </div>
+      </div>
     </main>
 
-    <div id="controls-trigger"></div>
     <script type="module" src="main.js"></script>
   </body>
 </html>
